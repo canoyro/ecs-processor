@@ -20,7 +20,7 @@ const params: EcsParams = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../parameters.json'), 'utf-8')
 );
 
-export class ECSStack extends cdk.Stack {
+export class EcsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 

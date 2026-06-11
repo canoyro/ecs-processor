@@ -30,7 +30,7 @@ Edit `parameters.json` before deploying:
 }
 ```
 
-`prefix` is optional. When set (e.g. `"staging"`), the stack is named `staging-ECS-stack`. Leave empty for `ECS-stack`.
+`prefix` is optional. When set (e.g. `"staging"`), the stack is named `staging-ecs-stack`. Leave empty for `ecs-stack`.
 
 ## Deploy
 
