@@ -21,8 +21,10 @@ export class EcsCluster extends Construct {
   readonly capacityProvider: ecs.AsgCapacityProvider;
   readonly bucket: s3.Bucket;
   readonly internalApiRepository: ecr.Repository;
+  readonly internalDataRepository: ecr.Repository;
   readonly sshKeyPairName: string;
   readonly internalApiRepositoryUri: string;
+  readonly internalDataRepositoryUri: string;
   readonly sharedStorageBucketName: string;
 
   constructor(scope: Construct, id: string, props: EcsClusterProps) {
@@ -53,6 +55,20 @@ export class EcsCluster extends Construct {
       ],
     });
     this.internalApiRepositoryUri = this.internalApiRepository.repositoryUri;
+
+    this.internalDataRepository = new ecr.Repository(this, 'EcsInternalDataRepository', {
+      repositoryName: 'internal-data-api',
+      imageScanOnPush: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      lifecycleRules: [
+        {
+          description: 'Expire untagged images after 7 days',
+          tagStatus: ecr.TagStatus.UNTAGGED,
+          maxImageAge: cdk.Duration.days(7),
+        },
+      ],
+    });
+    this.internalDataRepositoryUri = this.internalDataRepository.repositoryUri;
 
     const sshKeyPair = new ec2.KeyPair(this, 'EcsSshKeyPair', {
       keyPairName: `${stackName.toLowerCase()}-ssh-key`,
