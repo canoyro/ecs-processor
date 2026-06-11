@@ -1,0 +1,21 @@
+# Compiled TypeScript output
+*.js
+!jest.config.js
+*.d.ts
+
+# Dependencies
+node_modules/
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
