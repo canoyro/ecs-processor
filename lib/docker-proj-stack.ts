@@ -8,14 +8,15 @@ import { EcsVpcEndpoints } from './constructs/ecs-vpc-endpoints.js';
 import { EcsCluster } from './constructs/ecs-cluster.js';
 import { EcsServices } from './constructs/ecs-services.js';
 
-interface DockerParams {
+interface EcsParams {
+  prefix: string;
   vpcId: string;
-  subnetId: string;
-  availabilityZone: string;
+  subnetIds: string[];
   instanceType: string;
+  amiId: string;
 }
 
-const params: DockerParams = JSON.parse(
+const params: EcsParams = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../parameters.json'), 'utf-8')
 );
 
@@ -25,22 +26,12 @@ export class ECSStack extends cdk.Stack {
 
     const vpc = ec2.Vpc.fromLookup(this, 'EcsVpc', { vpcId: params.vpcId });
 
-    const routeTable = new ec2.CfnRouteTable(this, 'EcsRouteTable', {
-      vpcId: vpc.vpcId,
-      tags: [{ key: 'Name', value: `${this.stackName}-ecs-route-table` }],
-    });
-
-    new ec2.CfnSubnetRouteTableAssociation(this, 'EcsSubnetRouteTableAssociation', {
-      subnetId: params.subnetId,
-      routeTableId: routeTable.ref,
-    });
-
-    const subnet = ec2.Subnet.fromSubnetAttributes(this, 'EcsSubnet', {
-      subnetId: params.subnetId,
-      availabilityZone: params.availabilityZone,
-      routeTableId: routeTable.ref,
-    });
-    const vpcSubnets = { subnets: [subnet] };
+    // SubnetFilter.byIds selects the target subnet; CDK resolves its route table
+    // from the Vpc.fromLookup context — required for the S3 gateway endpoint to
+    // inject its route into the subnet's existing route table.
+    const vpcSubnets: ec2.SubnetSelection = {
+      subnetFilters: [ec2.SubnetFilter.byIds(params.subnetIds)],
+    };
 
     const sgs = new EcsSecurityGroups(this, 'EcsSgs', { vpc });
 
@@ -55,6 +46,7 @@ export class ECSStack extends cdk.Stack {
       vpcSubnets,
       instanceSg: sgs.instanceSg,
       instanceType: params.instanceType,
+      amiId: params.amiId,
     });
 
     new EcsServices(this, 'EcsServices', {

@@ -46,6 +46,15 @@ export class EcsServices extends Construct {
       actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:HeadObject'],
       resources: [`${bucket.bucketArn}/*`],
     }));
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        'ssmmessages:CreateControlChannel',
+        'ssmmessages:CreateDataChannel',
+        'ssmmessages:OpenControlChannel',
+        'ssmmessages:OpenDataChannel',
+      ],
+      resources: ['*'],
+    }));
 
     const taskDef = new ecs.Ec2TaskDefinition(this, 'InternalFileApiTaskDef', {
       networkMode: ecs.NetworkMode.AWS_VPC,
@@ -53,46 +62,12 @@ export class EcsServices extends Construct {
       taskRole,
     });
 
+    // Host path volume — mountpoint-s3 is mounted on the EC2 host at /mnt/s3-shared
+    // via user data (see ecs-cluster.ts). The container bind-mounts from there.
     taskDef.addVolume({
       name: 's3-shared',
       host: { sourcePath: '/mnt/s3-shared' },
     });
-
-    const mountpointContainer = taskDef.addContainer('mountpoint-s3', {
-      image: ecs.ContainerImage.fromRegistry('public.ecr.aws/mountpoint-s3/mountpoint-s3:latest'),
-      command: [bucket.bucketName, '/mnt/s3-shared', '--allow-other', '--allow-delete'],
-      essential: false,
-      memoryReservationMiB: 128,
-      privileged: true,
-      linuxParameters: (() => {
-        const lp = new ecs.LinuxParameters(scope, 'MountpointLinuxParams');
-        lp.addDevices({ hostPath: '/dev/fuse', containerPath: '/dev/fuse' });
-        return lp;
-      })(),
-      healthCheck: {
-        command: ['CMD', 'mountpoint', '-q', '/mnt/s3-shared'],
-        interval: cdk.Duration.seconds(10),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(15),
-      },
-      logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'mountpoint-s3',
-        logGroup,
-      }),
-    });
-
-    mountpointContainer.addMountPoints({
-      containerPath: '/mnt/s3-shared',
-      sourceVolume: 's3-shared',
-      readOnly: false,
-    });
-
-    // CDK's MountPoint interface does not expose propagation — set it via L1 override.
-    // "shared" propagation allows the FUSE mount to propagate from the sidecar to the host,
-    // where the app container's bind mount then picks it up.
-    const cfnTask = taskDef.node.defaultChild as ecs.CfnTaskDefinition;
-    cfnTask.addOverride('Properties.ContainerDefinitions.0.MountPoints.0.Propagation', 'shared');
 
     const appContainer = taskDef.addContainer('internal-file-api', {
       image: ecs.ContainerImage.fromEcrRepository(internalApiRepository, 'latest'),
@@ -121,15 +96,11 @@ export class EcsServices extends Construct {
       readOnly: false,
     });
 
-    appContainer.addContainerDependencies({
-      container: mountpointContainer,
-      condition: ecs.ContainerDependencyCondition.HEALTHY,
-    });
-
     const service = new ecs.Ec2Service(this, 'InternalFileApiService', {
       cluster,
       taskDefinition: taskDef,
       desiredCount: 2,
+      enableExecuteCommand: true,
       securityGroups: [instanceSg],
       capacityProviderStrategies: [
         { capacityProvider: capacityProviderName, weight: 1 },

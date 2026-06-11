@@ -4,12 +4,12 @@ CDK TypeScript stack that deploys an ECS EC2 cluster on an existing VPC, running
 
 ## Stack Resources
 
-- ECS cluster with Container Insights Enhanced enabled
+- ECS cluster (basic CloudWatch metrics — no Container Insights)
 - EC2 capacity provider (auto-scaling group, min 1 / max 4 instances, 60% target capacity)
 - ECS-optimized Amazon Linux 2023 instances
 - `internal-file-api` ECS service — 2 tasks desired, CPU auto-scaling at 40% (min 2 / max 8 tasks)
-- `mountpoint-s3` sidecar container (128 MiB soft limit) — mounts S3 bucket at `/mnt/s3-shared` via FUSE
-- `internal-file-api` container (256 MiB soft limit) — reads/writes `/mnt/s3-shared/message.txt`
+- S3 Mountpoint installed on each EC2 host via user data — mounts the shared S3 bucket at `/mnt/s3-shared`
+- `internal-file-api` container (256 MiB soft limit) — bind-mounts `/mnt/s3-shared` from the host, reads/writes `message.txt`
 - ECS Service Connect on namespace `internal.local`, DNS name `internal-file-api:8080`
 - Private VPC endpoints: SSM, EC2 Messages, SSM Messages, ECR API, ECR Docker, ECS, ECS Agent, ECS Telemetry, CloudWatch Logs, S3 (gateway)
 - ECR repository: `internal-file-api`
@@ -42,12 +42,19 @@ npx cdk deploy
 
 ## Push the API image
 
-The ECR repository is created by CDK. After the first deploy:
+The ECR repository is created by CDK. After the first deploy, build and push the image:
 
 ```bash
-cd docker/internal-file-api
-chmod +x push-to-ecr.sh
-./push-to-ecr.sh
+REGION=ap-southeast-2
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+
+aws ecr get-login-password --region "$REGION" \
+  | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+docker build -t internal-file-api docker/internal-file-api
+docker tag internal-file-api:latest "$ECR_REGISTRY/internal-file-api:latest"
+docker push "$ECR_REGISTRY/internal-file-api:latest"
 ```
 
 ## Test the API

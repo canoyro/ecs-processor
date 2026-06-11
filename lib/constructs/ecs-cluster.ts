@@ -12,6 +12,7 @@ interface EcsClusterProps {
   vpcSubnets: ec2.SubnetSelection;
   instanceSg: ec2.SecurityGroup;
   instanceType: string;
+  amiId: string;
 }
 
 export class EcsCluster extends Construct {
@@ -80,19 +81,51 @@ export class EcsCluster extends Construct {
     this.cluster = new ecs.Cluster(this, 'EcsCluster', {
       vpc,
       clusterName: `${stackName}-cluster`,
-      containerInsightsV2: ecs.ContainerInsights.ENHANCED,
     });
 
     this.cluster.addDefaultCloudMapNamespace({ name: 'internal.local' });
+
+    const userData = ec2.UserData.forLinux();
+    userData.addCommands(
+      // Allow FUSE mounts to be accessed by non-root users (ECS task containers)
+      'echo "user_allow_other" >> /etc/fuse.conf',
+      // Install mountpoint-s3 from the AL2023 repo or fall back to the S3 release RPM
+      // (the S3 gateway VPC endpoint routes this without internet access)
+      'dnf install -y mount-s3 2>/dev/null || ' +
+        '(curl -fsSL https://s3.amazonaws.com/mountpoint-s3-release/latest/x86_64/mount-s3.rpm' +
+        ' -o /tmp/mount-s3.rpm && dnf install -y /tmp/mount-s3.rpm && rm -f /tmp/mount-s3.rpm)',
+      'mkdir -p /mnt/s3-shared',
+    );
+    userData.addCommands(
+      // Systemd service keeps the S3 mount alive across reboots
+      `cat > /etc/systemd/system/mountpoint-s3.service <<EOF
+[Unit]
+Description=S3 Mountpoint shared storage
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/mount-s3 ${this.bucket.bucketName} /mnt/s3-shared --allow-other --allow-delete --foreground
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF`,
+      'systemctl daemon-reload',
+      'systemctl enable --now mountpoint-s3',
+    );
 
     this.asg = new autoscaling.AutoScalingGroup(this, 'EcsAsg', {
       vpc,
       vpcSubnets,
       instanceType: new ec2.InstanceType(props.instanceType),
-      machineImage: ecs.EcsOptimizedImage.amazonLinux2023(),
+      machineImage: ec2.MachineImage.genericLinux({ [cdk.Stack.of(this).region]: props.amiId }),
       securityGroup: instanceSg,
       role: instanceRole,
       keyPair: sshKeyPair,
+      userData,
       minCapacity: 1,
       maxCapacity: 4,
       healthChecks: autoscaling.HealthChecks.ec2({ gracePeriod: cdk.Duration.minutes(5) }),
