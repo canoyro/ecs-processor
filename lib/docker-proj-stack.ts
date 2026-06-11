@@ -54,6 +54,7 @@ export class EcsStack extends cdk.Stack {
       capacityProviderName: cluster.capacityProvider.capacityProviderName,
       bucket: cluster.bucket,
       internalApiRepository: cluster.internalApiRepository,
+      internalDataRepository: cluster.internalDataRepository,
       instanceSg: sgs.instanceSg,
     });
 
@@ -72,6 +73,10 @@ export class EcsStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'EcsInternalApiRepositoryUri', {
       value: cluster.internalApiRepositoryUri,
       description: 'ECR repository URI for the internal file API image',
+    });
+    new cdk.CfnOutput(this, 'EcsInternalDataRepositoryUri', {
+      value: cluster.internalDataRepositoryUri,
+      description: 'ECR repository URI for the internal data API image',
     });
     new cdk.CfnOutput(this, 'SharedStorageBucketName', {
       value: cluster.sharedStorageBucketName,

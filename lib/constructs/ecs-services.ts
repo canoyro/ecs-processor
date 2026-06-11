@@ -12,6 +12,7 @@ interface EcsServicesProps {
   capacityProviderName: string;
   bucket: s3.Bucket;
   internalApiRepository: ecr.Repository;
+  internalDataRepository: ecr.Repository;
   instanceSg: ec2.SecurityGroup;
 }
 
@@ -19,7 +20,7 @@ export class EcsServices extends Construct {
   constructor(scope: Construct, id: string, props: EcsServicesProps) {
     super(scope, id);
 
-    const { cluster, capacityProviderName, bucket, internalApiRepository, instanceSg } = props;
+    const { cluster, capacityProviderName, bucket, internalApiRepository, internalDataRepository, instanceSg } = props;
     const stackName = cdk.Stack.of(this).stackName;
 
     const logGroup = new logs.LogGroup(this, 'EcsLogGroup', {
@@ -56,7 +57,9 @@ export class EcsServices extends Construct {
       resources: ['*'],
     }));
 
-    const taskDef = new ecs.Ec2TaskDefinition(this, 'InternalFileApiTaskDef', {
+    // ── internal-file-api ──────────────────────────────────────────────────────
+
+    const fileApiTaskDef = new ecs.Ec2TaskDefinition(this, 'InternalFileApiTaskDef', {
       networkMode: ecs.NetworkMode.AWS_VPC,
       executionRole,
       taskRole,
@@ -64,12 +67,12 @@ export class EcsServices extends Construct {
 
     // Host path volume — mountpoint-s3 is mounted on the EC2 host at /mnt/s3-shared
     // via user data (see ecs-cluster.ts). The container bind-mounts from there.
-    taskDef.addVolume({
+    fileApiTaskDef.addVolume({
       name: 's3-shared',
       host: { sourcePath: '/mnt/s3-shared' },
     });
 
-    const appContainer = taskDef.addContainer('internal-file-api', {
+    const fileApiContainer = fileApiTaskDef.addContainer('internal-file-api', {
       image: ecs.ContainerImage.fromEcrRepository(internalApiRepository, 'latest'),
       essential: true,
       memoryReservationMiB: 256,
@@ -90,16 +93,16 @@ export class EcsServices extends Construct {
       }),
     });
 
-    appContainer.addMountPoints({
+    fileApiContainer.addMountPoints({
       containerPath: '/mnt/s3-shared',
       sourceVolume: 's3-shared',
       readOnly: false,
     });
 
-    const service = new ecs.Ec2Service(this, 'InternalFileApiService', {
+    const fileApiService = new ecs.Ec2Service(this, 'InternalFileApiService', {
       cluster,
-      taskDefinition: taskDef,
-      desiredCount: 2,
+      taskDefinition: fileApiTaskDef,
+      desiredCount: 1,
       enableExecuteCommand: true,
       securityGroups: [instanceSg],
       capacityProviderStrategies: [
@@ -118,8 +121,77 @@ export class EcsServices extends Construct {
       placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
     });
 
-    service.autoScaleTaskCount({ minCapacity: 2, maxCapacity: 8 })
+    fileApiService.autoScaleTaskCount({ minCapacity: 2, maxCapacity: 8 })
       .scaleOnCpuUtilization('InternalFileApiCpuScaling', {
+        targetUtilizationPercent: 40,
+        scaleInCooldown: cdk.Duration.minutes(5),
+        scaleOutCooldown: cdk.Duration.minutes(5),
+      });
+
+    // ── internal-data-api ──────────────────────────────────────────────────────
+
+    const dataApiTaskDef = new ecs.Ec2TaskDefinition(this, 'InternalDataApiTaskDef', {
+      networkMode: ecs.NetworkMode.AWS_VPC,
+      executionRole,
+      taskRole,
+    });
+
+    dataApiTaskDef.addVolume({
+      name: 's3-shared',
+      host: { sourcePath: '/mnt/s3-shared' },
+    });
+
+    const dataApiContainer = dataApiTaskDef.addContainer('internal-data-api', {
+      image: ecs.ContainerImage.fromEcrRepository(internalDataRepository, 'latest'),
+      essential: true,
+      memoryReservationMiB: 256,
+      environment: {
+        LOG_FILE: '/mnt/s3-shared/log.json',
+        PORT: '9090',
+      },
+      portMappings: [
+        {
+          containerPort: 9090,
+          name: 'data',
+          appProtocol: ecs.AppProtocol.http,
+        },
+      ],
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'internal-data-api',
+        logGroup,
+      }),
+    });
+
+    dataApiContainer.addMountPoints({
+      containerPath: '/mnt/s3-shared',
+      sourceVolume: 's3-shared',
+      readOnly: false,
+    });
+
+    const dataApiService = new ecs.Ec2Service(this, 'InternalDataApiService', {
+      cluster,
+      taskDefinition: dataApiTaskDef,
+      desiredCount: 1,
+      enableExecuteCommand: true,
+      securityGroups: [instanceSg],
+      capacityProviderStrategies: [
+        { capacityProvider: capacityProviderName, weight: 1 },
+      ],
+      serviceConnectConfiguration: {
+        namespace: 'internal.local',
+        services: [
+          {
+            portMappingName: 'data',
+            dnsName: 'internal-data-api',
+            port: 9090,
+          },
+        ],
+      },
+      placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
+    });
+
+    dataApiService.autoScaleTaskCount({ minCapacity: 2, maxCapacity: 8 })
+      .scaleOnCpuUtilization('InternalDataApiCpuScaling', {
         targetUtilizationPercent: 40,
         scaleInCooldown: cdk.Duration.minutes(5),
         scaleOutCooldown: cdk.Duration.minutes(5),
