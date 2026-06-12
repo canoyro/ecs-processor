@@ -7,5 +7,5 @@
   ],
   "instanceType": "c7i-flex.large",
   "amiId": "ami-0b345358be6687804",
-  "desiredCount": 1
+  "desiredCount": 0
 }
