@@ -1,5 +1,4 @@
 import * as cdk from 'aws-cdk-lib/core';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -9,19 +8,19 @@ import { Construct } from 'constructs';
 
 interface EcsServicesProps {
   cluster: ecs.Cluster;
-  capacityProviderName: string;
   bucket: s3.Bucket;
   internalApiRepository: ecr.Repository;
   internalDataRepository: ecr.Repository;
-  instanceSg: ec2.SecurityGroup;
+  desiredCount: number;
 }
 
 export class EcsServices extends Construct {
   constructor(scope: Construct, id: string, props: EcsServicesProps) {
     super(scope, id);
 
-    const { cluster, capacityProviderName, bucket, internalApiRepository, internalDataRepository, instanceSg } = props;
+    const { cluster, bucket, internalApiRepository, internalDataRepository, desiredCount } = props;
     const stackName = cdk.Stack.of(this).stackName;
+    const minTaskCount = desiredCount > 0 ? 1 : 0;
 
     const logGroup = new logs.LogGroup(this, 'EcsLogGroup', {
       logGroupName: `/ecs/${stackName}`,
@@ -60,7 +59,7 @@ export class EcsServices extends Construct {
     // ── internal-file-api ──────────────────────────────────────────────────────
 
     const fileApiTaskDef = new ecs.Ec2TaskDefinition(this, 'InternalFileApiTaskDef', {
-      networkMode: ecs.NetworkMode.AWS_VPC,
+      networkMode: ecs.NetworkMode.BRIDGE,
       executionRole,
       taskRole,
     });
@@ -83,8 +82,7 @@ export class EcsServices extends Construct {
       portMappings: [
         {
           containerPort: 8080,
-          name: 'api',
-          appProtocol: ecs.AppProtocol.http,
+          hostPort: 8080,
         },
       ],
       logging: ecs.LogDrivers.awsLogs({
@@ -102,26 +100,15 @@ export class EcsServices extends Construct {
     const fileApiService = new ecs.Ec2Service(this, 'InternalFileApiService', {
       cluster,
       taskDefinition: fileApiTaskDef,
-      desiredCount: 1,
+      desiredCount,
       enableExecuteCommand: true,
-      securityGroups: [instanceSg],
-      capacityProviderStrategies: [
-        { capacityProvider: capacityProviderName, weight: 1 },
-      ],
-      serviceConnectConfiguration: {
-        namespace: 'internal.local',
-        services: [
-          {
-            portMappingName: 'api',
-            dnsName: 'internal-file-api',
-            port: 8080,
-          },
-        ],
-      },
       placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
+      minHealthyPercent: 50,
+      maxHealthyPercent: 200,
+      circuitBreaker: { rollback: true },
     });
 
-    fileApiService.autoScaleTaskCount({ minCapacity: 2, maxCapacity: 8 })
+    fileApiService.autoScaleTaskCount({ minCapacity: minTaskCount, maxCapacity: 2 })
       .scaleOnCpuUtilization('InternalFileApiCpuScaling', {
         targetUtilizationPercent: 40,
         scaleInCooldown: cdk.Duration.minutes(5),
@@ -131,7 +118,7 @@ export class EcsServices extends Construct {
     // ── internal-data-api ──────────────────────────────────────────────────────
 
     const dataApiTaskDef = new ecs.Ec2TaskDefinition(this, 'InternalDataApiTaskDef', {
-      networkMode: ecs.NetworkMode.AWS_VPC,
+      networkMode: ecs.NetworkMode.BRIDGE,
       executionRole,
       taskRole,
     });
@@ -152,8 +139,7 @@ export class EcsServices extends Construct {
       portMappings: [
         {
           containerPort: 9090,
-          name: 'data',
-          appProtocol: ecs.AppProtocol.http,
+          hostPort: 9090,
         },
       ],
       logging: ecs.LogDrivers.awsLogs({
@@ -171,26 +157,15 @@ export class EcsServices extends Construct {
     const dataApiService = new ecs.Ec2Service(this, 'InternalDataApiService', {
       cluster,
       taskDefinition: dataApiTaskDef,
-      desiredCount: 1,
+      desiredCount,
       enableExecuteCommand: true,
-      securityGroups: [instanceSg],
-      capacityProviderStrategies: [
-        { capacityProvider: capacityProviderName, weight: 1 },
-      ],
-      serviceConnectConfiguration: {
-        namespace: 'internal.local',
-        services: [
-          {
-            portMappingName: 'data',
-            dnsName: 'internal-data-api',
-            port: 9090,
-          },
-        ],
-      },
       placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
+      minHealthyPercent: 50,
+      maxHealthyPercent: 200,
+      circuitBreaker: { rollback: true },
     });
 
-    dataApiService.autoScaleTaskCount({ minCapacity: 2, maxCapacity: 8 })
+    dataApiService.autoScaleTaskCount({ minCapacity: minTaskCount, maxCapacity: 2 })
       .scaleOnCpuUtilization('InternalDataApiCpuScaling', {
         targetUtilizationPercent: 40,
         scaleInCooldown: cdk.Duration.minutes(5),

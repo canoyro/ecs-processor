@@ -14,6 +14,7 @@ interface EcsParams {
   subnetIds: string[];
   instanceType: string;
   amiId: string;
+  desiredCount?: number;
 }
 
 const params: EcsParams = JSON.parse(
@@ -51,11 +52,10 @@ export class EcsStack extends cdk.Stack {
 
     new EcsServices(this, 'EcsServices', {
       cluster: cluster.cluster,
-      capacityProviderName: cluster.capacityProvider.capacityProviderName,
       bucket: cluster.bucket,
       internalApiRepository: cluster.internalApiRepository,
       internalDataRepository: cluster.internalDataRepository,
-      instanceSg: sgs.instanceSg,
+      desiredCount: params.desiredCount ?? 1,
     });
 
     new cdk.CfnOutput(this, 'EcsClusterName', {

@@ -22,11 +22,10 @@ export class EcsSecurityGroups extends Construct {
       disableInlineRules: true,
     });
 
-    // Allow inter-task traffic for ECS Service Connect (dynamic ephemeral ports)
     this.instanceSg.addIngressRule(
       ec2.Peer.securityGroupId(this.instanceSg.securityGroupId),
       ec2.Port.allTcp(),
-      'Inter-task traffic for ECS Service Connect',
+      'Inter-instance traffic within the cluster',
     );
 
     this.endpointSg = new ec2.SecurityGroup(this, 'EcsVpcEndpointSg', {

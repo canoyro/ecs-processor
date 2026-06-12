@@ -99,10 +99,10 @@ export class EcsCluster extends Construct {
       clusterName: `${stackName}-cluster`,
     });
 
-    this.cluster.addDefaultCloudMapNamespace({ name: 'internal.local' });
-
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
+      // Register this instance with the correct ECS cluster
+      `echo ECS_CLUSTER=${stackName}-cluster >> /etc/ecs/ecs.config`,
       // Allow FUSE mounts to be accessed by non-root users (ECS task containers)
       'echo "user_allow_other" >> /etc/fuse.conf',
       // Install mountpoint-s3 from the AL2023 repo or fall back to the S3 release RPM
@@ -142,7 +142,7 @@ EOF`,
       role: instanceRole,
       keyPair: sshKeyPair,
       userData,
-      minCapacity: 1,
+      minCapacity: 2,
       maxCapacity: 4,
       healthChecks: autoscaling.HealthChecks.ec2({ gracePeriod: cdk.Duration.minutes(5) }),
       updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
