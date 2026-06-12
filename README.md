@@ -13,9 +13,6 @@ CDK TypeScript stack that deploys an ECS EC2 cluster on an existing VPC, running
 - `internal-data-api` ECS service — append-only JSON log on port 9090
 - Both services: `desiredCount` from `parameters.json`, CPU auto-scaling (min 1 / max 2 tasks), circuit breaker with auto-rollback, 50–200% deployment health bounds
 - Both containers bind-mount `/mnt/s3-shared` from the host, sharing the same S3-backed filesystem
-- ECS Service Connect on namespace `internal.local`
-  - `internal-file-api:8080`
-  - `internal-data-api:9090`
 - ECS Exec enabled on all tasks (SSM Session Manager)
 - Private VPC endpoints: SSM, EC2 Messages, SSM Messages, ECR API, ECR Docker, ECS, ECS Agent, ECS Telemetry, CloudWatch Logs, S3 (gateway)
 - ECR repositories: `internal-file-api`, `internal-data-api` (retained on stack deletion)
@@ -70,7 +67,7 @@ npx cdk deploy
 npm test
 ```
 
-22 CDK assertion tests covering cluster, services, ECR repos, S3 bucket, auto scaling, security groups, and VPC endpoints.
+19 CDK assertion tests covering cluster, services, ECR repos, S3 bucket, auto scaling, security groups, and VPC endpoints.
 
 ## Push images to ECR
 
@@ -108,14 +105,26 @@ docker push "$ECR_REGISTRY/internal-data-api:latest"
 
 ## Test the APIs
 
-Connect to an ECS instance via SSM Session Manager, then:
+Connect to an ECS instance via SSM Session Manager. Tasks use `awsvpc` networking so each task gets its own private IP. Get the task IP then curl directly:
+
+```bash
+CLUSTER="staging-ecs-stack-cluster"
+
+# Get task private IPs
+aws ecs describe-tasks \
+  --cluster "$CLUSTER" \
+  --tasks $(aws ecs list-tasks --cluster "$CLUSTER" --desired-status RUNNING --query taskArns --output text) \
+  --query "tasks[*].{task:taskArn,ip:containers[0].networkInterfaces[0].privateIpv4Address,name:containers[0].name}" \
+  --output table
+```
 
 ### internal-file-api (port 8080)
 
 ```bash
-curl http://internal-file-api.internal.local:8080/health
-curl "http://internal-file-api.internal.local:8080/write?value=hello"
-curl http://internal-file-api.internal.local:8080/read
+TASK_IP=<task-private-ip>
+curl http://$TASK_IP:8080/health
+curl "http://$TASK_IP:8080/write?value=hello"
+curl http://$TASK_IP:8080/read
 ```
 
 `/read` from any task returns the same value — all tasks share the same S3 mount.
@@ -123,11 +132,12 @@ curl http://internal-file-api.internal.local:8080/read
 ### internal-data-api (port 9090)
 
 ```bash
-curl http://internal-data-api.internal.local:9090/health
-curl "http://internal-data-api.internal.local:9090/append?message=first-entry"
-curl "http://internal-data-api.internal.local:9090/append?message=second-entry"
-curl http://internal-data-api.internal.local:9090/entries
-curl http://internal-data-api.internal.local:9090/clear
+TASK_IP=<task-private-ip>
+curl http://$TASK_IP:9090/health
+curl "http://$TASK_IP:9090/append?message=first-entry"
+curl "http://$TASK_IP:9090/append?message=second-entry"
+curl http://$TASK_IP:9090/entries
+curl http://$TASK_IP:9090/clear
 ```
 
 `/entries` returns the full log across all tasks — entries are appended to the shared `log.json` on S3.

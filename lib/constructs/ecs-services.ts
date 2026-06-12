@@ -85,8 +85,6 @@ export class EcsServices extends Construct {
       portMappings: [
         {
           containerPort: 8080,
-          name: 'api',
-          appProtocol: ecs.AppProtocol.http,
         },
       ],
       logging: ecs.LogDrivers.awsLogs({
@@ -110,16 +108,6 @@ export class EcsServices extends Construct {
       capacityProviderStrategies: [
         { capacityProvider: capacityProviderName, weight: 1 },
       ],
-      serviceConnectConfiguration: {
-        namespace: 'internal.local',
-        services: [
-          {
-            portMappingName: 'api',
-            dnsName: 'internal-file-api',
-            port: 8080,
-          },
-        ],
-      },
       placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
       minHealthyPercent: 50,
       maxHealthyPercent: 200,
@@ -157,8 +145,6 @@ export class EcsServices extends Construct {
       portMappings: [
         {
           containerPort: 9090,
-          name: 'data',
-          appProtocol: ecs.AppProtocol.http,
         },
       ],
       logging: ecs.LogDrivers.awsLogs({
@@ -182,16 +168,6 @@ export class EcsServices extends Construct {
       capacityProviderStrategies: [
         { capacityProvider: capacityProviderName, weight: 1 },
       ],
-      serviceConnectConfiguration: {
-        namespace: 'internal.local',
-        services: [
-          {
-            portMappingName: 'data',
-            dnsName: 'internal-data-api',
-            port: 9090,
-          },
-        ],
-      },
       placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
       minHealthyPercent: 50,
       maxHealthyPercent: 200,

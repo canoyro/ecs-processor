@@ -72,12 +72,6 @@ describe('ECS Cluster', () => {
     });
   });
 
-  test('creates a Service Discovery namespace', () => {
-    const template = buildTemplate();
-    template.hasResourceProperties('AWS::ServiceDiscovery::PrivateDnsNamespace', {
-      Name: 'internal.local',
-    });
-  });
 });
 
 describe('ECR Repositories', () => {
@@ -128,40 +122,6 @@ describe('ECS Services', () => {
   test('creates two ECS services', () => {
     const template = buildTemplate();
     template.resourceCountIs('AWS::ECS::Service', 2);
-  });
-
-  test('internal-file-api service has Service Connect configured', () => {
-    const template = buildTemplate();
-    template.hasResourceProperties('AWS::ECS::Service', Match.objectLike({
-      ServiceConnectConfiguration: Match.objectLike({
-        Enabled: true,
-        Services: Match.arrayWith([
-          Match.objectLike({
-            PortName: 'api',
-            ClientAliases: Match.arrayWith([
-              Match.objectLike({ DnsName: 'internal-file-api', Port: 8080 }),
-            ]),
-          }),
-        ]),
-      }),
-    }));
-  });
-
-  test('internal-data-api service has Service Connect configured', () => {
-    const template = buildTemplate();
-    template.hasResourceProperties('AWS::ECS::Service', Match.objectLike({
-      ServiceConnectConfiguration: Match.objectLike({
-        Enabled: true,
-        Services: Match.arrayWith([
-          Match.objectLike({
-            PortName: 'data',
-            ClientAliases: Match.arrayWith([
-              Match.objectLike({ DnsName: 'internal-data-api', Port: 9090 }),
-            ]),
-          }),
-        ]),
-      }),
-    }));
   });
 
   test('both services have ECS Exec enabled', () => {

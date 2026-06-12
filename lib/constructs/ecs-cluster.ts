@@ -99,8 +99,6 @@ export class EcsCluster extends Construct {
       clusterName: `${stackName}-cluster`,
     });
 
-    this.cluster.addDefaultCloudMapNamespace({ name: 'internal.local' });
-
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       // Register this instance with the correct ECS cluster
