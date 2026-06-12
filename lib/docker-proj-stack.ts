@@ -56,7 +56,6 @@ export class EcsStack extends cdk.Stack {
       bucket: cluster.bucket,
       internalApiRepository: cluster.internalApiRepository,
       internalDataRepository: cluster.internalDataRepository,
-      instanceSg: sgs.instanceSg,
       desiredCount: params.desiredCount ?? 1,
     });
 

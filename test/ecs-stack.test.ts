@@ -162,10 +162,10 @@ describe('ECS Services', () => {
     template.resourceCountIs('AWS::ECS::TaskDefinition', 2);
   });
 
-  test('task definitions use awsvpc network mode', () => {
+  test('task definitions use bridge network mode', () => {
     const template = buildTemplate();
     template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-      NetworkMode: 'awsvpc',
+      NetworkMode: 'bridge',
     });
   });
 });

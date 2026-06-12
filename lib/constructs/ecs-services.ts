@@ -1,5 +1,4 @@
 import * as cdk from 'aws-cdk-lib/core';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -13,7 +12,6 @@ interface EcsServicesProps {
   bucket: s3.Bucket;
   internalApiRepository: ecr.Repository;
   internalDataRepository: ecr.Repository;
-  instanceSg: ec2.SecurityGroup;
   desiredCount: number;
 }
 
@@ -21,7 +19,7 @@ export class EcsServices extends Construct {
   constructor(scope: Construct, id: string, props: EcsServicesProps) {
     super(scope, id);
 
-    const { cluster, capacityProviderName, bucket, internalApiRepository, internalDataRepository, instanceSg, desiredCount } = props;
+    const { cluster, capacityProviderName, bucket, internalApiRepository, internalDataRepository, desiredCount } = props;
     const stackName = cdk.Stack.of(this).stackName;
     const minTaskCount = desiredCount > 0 ? 1 : 0;
 
@@ -62,7 +60,7 @@ export class EcsServices extends Construct {
     // ── internal-file-api ──────────────────────────────────────────────────────
 
     const fileApiTaskDef = new ecs.Ec2TaskDefinition(this, 'InternalFileApiTaskDef', {
-      networkMode: ecs.NetworkMode.AWS_VPC,
+      networkMode: ecs.NetworkMode.BRIDGE,
       executionRole,
       taskRole,
     });
@@ -85,6 +83,7 @@ export class EcsServices extends Construct {
       portMappings: [
         {
           containerPort: 8080,
+          hostPort: 8080,
         },
       ],
       logging: ecs.LogDrivers.awsLogs({
@@ -104,7 +103,6 @@ export class EcsServices extends Construct {
       taskDefinition: fileApiTaskDef,
       desiredCount,
       enableExecuteCommand: true,
-      securityGroups: [instanceSg],
       capacityProviderStrategies: [
         { capacityProvider: capacityProviderName, weight: 1 },
       ],
@@ -124,7 +122,7 @@ export class EcsServices extends Construct {
     // ── internal-data-api ──────────────────────────────────────────────────────
 
     const dataApiTaskDef = new ecs.Ec2TaskDefinition(this, 'InternalDataApiTaskDef', {
-      networkMode: ecs.NetworkMode.AWS_VPC,
+      networkMode: ecs.NetworkMode.BRIDGE,
       executionRole,
       taskRole,
     });
@@ -145,6 +143,7 @@ export class EcsServices extends Construct {
       portMappings: [
         {
           containerPort: 9090,
+          hostPort: 9090,
         },
       ],
       logging: ecs.LogDrivers.awsLogs({
@@ -164,7 +163,6 @@ export class EcsServices extends Construct {
       taskDefinition: dataApiTaskDef,
       desiredCount,
       enableExecuteCommand: true,
-      securityGroups: [instanceSg],
       capacityProviderStrategies: [
         { capacityProvider: capacityProviderName, weight: 1 },
       ],
