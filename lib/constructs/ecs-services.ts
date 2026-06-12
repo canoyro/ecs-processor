@@ -8,7 +8,6 @@ import { Construct } from 'constructs';
 
 interface EcsServicesProps {
   cluster: ecs.Cluster;
-  capacityProviderName: string;
   bucket: s3.Bucket;
   internalApiRepository: ecr.Repository;
   internalDataRepository: ecr.Repository;
@@ -19,7 +18,7 @@ export class EcsServices extends Construct {
   constructor(scope: Construct, id: string, props: EcsServicesProps) {
     super(scope, id);
 
-    const { cluster, capacityProviderName, bucket, internalApiRepository, internalDataRepository, desiredCount } = props;
+    const { cluster, bucket, internalApiRepository, internalDataRepository, desiredCount } = props;
     const stackName = cdk.Stack.of(this).stackName;
     const minTaskCount = desiredCount > 0 ? 1 : 0;
 
@@ -103,9 +102,6 @@ export class EcsServices extends Construct {
       taskDefinition: fileApiTaskDef,
       desiredCount,
       enableExecuteCommand: true,
-      capacityProviderStrategies: [
-        { capacityProvider: capacityProviderName, weight: 1 },
-      ],
       placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
       minHealthyPercent: 50,
       maxHealthyPercent: 200,
@@ -163,9 +159,6 @@ export class EcsServices extends Construct {
       taskDefinition: dataApiTaskDef,
       desiredCount,
       enableExecuteCommand: true,
-      capacityProviderStrategies: [
-        { capacityProvider: capacityProviderName, weight: 1 },
-      ],
       placementStrategies: [ecs.PlacementStrategy.spreadAcrossInstances()],
       minHealthyPercent: 50,
       maxHealthyPercent: 200,

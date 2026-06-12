@@ -52,7 +52,6 @@ export class EcsStack extends cdk.Stack {
 
     new EcsServices(this, 'EcsServices', {
       cluster: cluster.cluster,
-      capacityProviderName: cluster.capacityProvider.capacityProviderName,
       bucket: cluster.bucket,
       internalApiRepository: cluster.internalApiRepository,
       internalDataRepository: cluster.internalDataRepository,
