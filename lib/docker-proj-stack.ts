@@ -6,7 +6,6 @@ import * as path from 'path';
 import { EcsSecurityGroups } from './constructs/ecs-security-groups.js';
 import { EcsVpcEndpoints } from './constructs/ecs-vpc-endpoints.js';
 import { EcsCluster } from './constructs/ecs-cluster.js';
-import { EcsServices } from './constructs/ecs-services.js';
 
 interface EcsParams {
   prefix: string;
@@ -14,7 +13,6 @@ interface EcsParams {
   subnetIds: string[];
   instanceType: string;
   amiId: string;
-  desiredCount?: number;
 }
 
 const params: EcsParams = JSON.parse(
@@ -48,14 +46,6 @@ export class EcsStack extends cdk.Stack {
       instanceSg: sgs.instanceSg,
       instanceType: params.instanceType,
       amiId: params.amiId,
-    });
-
-    new EcsServices(this, 'EcsServices', {
-      cluster: cluster.cluster,
-      bucket: cluster.bucket,
-      internalApiRepository: cluster.internalApiRepository,
-      internalDataRepository: cluster.internalDataRepository,
-      desiredCount: params.desiredCount ?? 1,
     });
 
     new cdk.CfnOutput(this, 'EcsClusterName', {
