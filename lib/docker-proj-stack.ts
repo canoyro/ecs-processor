@@ -48,6 +48,10 @@ export class EcsStack extends cdk.Stack {
       amiId: params.amiId,
     });
 
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+    });
     new cdk.CfnOutput(this, 'EcsClusterName', {
       value: cluster.cluster.clusterName,
       description: 'ECS cluster name',
@@ -71,6 +75,10 @@ export class EcsStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'SharedStorageBucketName', {
       value: cluster.sharedStorageBucketName,
       description: 'S3 bucket name for shared storage via S3 Mountpoint',
+    });
+    new cdk.CfnOutput(this, 'EcsCapacityProviderName', {
+      value: cluster.capacityProvider.capacityProviderName,
+      description: 'ECS capacity provider name for use in ecs-services',
     });
   }
 }

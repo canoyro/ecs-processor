@@ -21,6 +21,7 @@ Deploy this stack first. Its CloudFormation outputs are required inputs for `ecs
 | CloudFormation Output | Purpose |
 |---|---|
 | `EcsClusterName` | ECS cluster name → `clusterName` in ecs-services |
+| `EcsCapacityProviderName` | Capacity provider name → `capacityProviderName` in ecs-services |
 | `SharedStorageBucketName` | S3 bucket name → `bucketName` in ecs-services |
 | `EcsInternalApiRepositoryUri` | ECR URI → `internalFileApiRepositoryUri` in ecs-services |
 | `EcsInternalDataRepositoryUri` | ECR URI → `internalDataApiRepositoryUri` in ecs-services |
